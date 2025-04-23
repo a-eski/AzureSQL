@@ -7,7 +7,6 @@
 ***********************************************
 
 Change Log:
-	2024-04-23 - Add ability to skipp all CDC tables during maintenance.
 	2024-04-23 - Add ability to skip certain tables during maintenance.
 	2024-09-23 - Avoid rebuild heaps on external tables as this is not needed and not possible.
 	2024-09-18 - Preserve xml compression in case this was used for the index.
@@ -33,8 +32,7 @@ ALTER PROCEDURE [AzureSQLMaintenance]
 		@RebuildHeaps bit = 0,
 		@LogToTable bit = 0,
 		@debug nvarchar(10) = 'off',
-		@skipTables nvarchar(500) = null,
-		@skipCdcTables bit = 0
+		@skipTables nvarchar(500) = null
 	)
 as
 begin
@@ -317,39 +315,16 @@ begin
 				and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
 
 		/* Tables marked to skip */
-		drop table if exists #TablesToSkip;
-		create table #TablesToSkip
-		(
-		    [value] nvarchar(100)
-		);
-
 		if @skipTables is not null
-        	begin
-			insert into #TablesToSkip ([value])
-			select value
-			from STRING_SPLIT(@skipTables, ',');
-
+		begin
 			update #idxBefore set SkipIndex=1,SkipReason='Table marked to skip'
 			where (
-				object_name(object_id) in (
-					select [value] from #TablesToSkip /*  Exclude tables to skip passed in from @skipTables */
-				)
-			)
-		end
-
-		-- drop temp table which holds tables to skip passed in from @skipTables
-		drop table if exists #TablesToSkip;
-
-		-- If skipping CDC tables
-		if @skipCdcTables = 1
-		begin
-			update #idxBefore set SkipIndex=1,SkipReason='CDC table'
-			where (
 				object_id in (
-					select object_id from cdc.index_columns
+					select object_id from #idxBefore where IndexName in (select [value]
+						from STRING_SPLIT(@skipTables, ',') /*  Exclude tables to skip passed in from @skipTables */
+					)
 				)
 			)
-				  and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
 		end
 
 		/***/
@@ -679,8 +654,5 @@ exec  AzureSQLMaintenance 'index'
 5. run maintenance excluding skip tables
 exec AzureSQLMaintenance @skipTables='TableToSkip'
 exec AzureSQLMaintenance @skipTables='TableToSkipOne,TableToSkip2'
-
-6. run maintenance excluding CDC tables
-exec AzureSQLMaintenance @skipCdcTables=1
 
 */
