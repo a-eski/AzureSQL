@@ -7,6 +7,7 @@
 ***********************************************
 
 Change Log:
+	2024-04-23 - Add ability to skipp all CDC tables during maintenance.
 	2024-04-23 - Add ability to skip certain tables during maintenance.
 	2024-09-23 - Avoid rebuild heaps on external tables as this is not needed and not possible.
 	2024-09-18 - Preserve xml compression in case this was used for the index.
@@ -33,7 +34,8 @@ ALTER PROCEDURE [AzureSQLMaintenance]
 		@RebuildHeaps bit = 0,
 		@LogToTable bit = 0,
 		@debug nvarchar(10) = 'off',
-		@skipTables nvarchar(500) = null
+		@skipTables nvarchar(500) = null,
+		@skipCdcTables bit = 0
 	)
 as
 begin
@@ -332,6 +334,18 @@ begin
 							)
 				)
 				and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
+
+		-- If skipping CDC tables
+		if @skipCdcTables = 1
+		begin
+			update #idxBefore set SkipIndex=1,SkipReason='CDC table'
+			where (
+				object_id in (
+					select object_id from cdc.index_columns
+				)
+			)
+				  and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
+		end
 
 		/***/
 		update #idxBefore set OperationToTake =
