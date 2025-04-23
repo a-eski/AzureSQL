@@ -320,7 +320,7 @@ begin
 			update #idxBefore set SkipIndex=1,SkipReason='Table marked to skip'
 			where (
 				object_id in (
-					select object_id from #idxBefore where IndexName in (select [value]
+					select object_id from #idxBefore where ObjectName in (select [value]
 						from STRING_SPLIT(@skipTables, ',') /*  Exclude tables to skip passed in from @skipTables */
 					)
 				)
