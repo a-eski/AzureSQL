@@ -315,28 +315,17 @@ begin
 				and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
 
 		/* Tables marked to skip */
-		drop table if exists #TablesToSkip;
-		create table #TablesToSkip
-		(
-		    [value] nvarchar(100)
-		);
-
 		if @skipTables is not null
-        	begin
-			insert into #TablesToSkip ([value])
-			select value
-			from STRING_SPLIT(@skipTables, ',');
-
+		begin
 			update #idxBefore set SkipIndex=1,SkipReason='Table marked to skip'
 			where (
-				object_name(object_id) in (
-					select [value] from #TablesToSkip /*  Exclude tables to skip passed in from @skipTables */
+				object_id in (
+					select object_id from #idxBefore where IndexName in (select [value]
+						from STRING_SPLIT(@skipTables, ',') /*  Exclude tables to skip passed in from @skipTables */
+					)
 				)
 			)
 		end
-
-		-- drop temp table which holds tables to skip passed in from @skipTables
-		drop table if exists #TablesToSkip;
 
 		/***/
 		update #idxBefore set OperationToTake =
