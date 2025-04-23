@@ -333,11 +333,11 @@ begin
 		begin
 			update #idxBefore set SkipIndex=1,SkipReason='CDC table'
 			where (
-	                    object_id in (
-				SELECT i.object_id
-				FROM sys.indexes AS i
-				JOIN sys.tables AS t ON i.object_id = t.object_id
-				WHERE SCHEMA_NAME(t.schema_id) = 'cdc'
+	                    ObjectName in (
+					SELECT idxs.name
+					FROM sys.indexes AS idxs
+					INNER JOIN sys.tables AS t ON idxs.object_id = t.object_id
+					WHERE SCHEMA_NAME(t.schema_id) = 'cdc'
 				)
 			)
 			and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
