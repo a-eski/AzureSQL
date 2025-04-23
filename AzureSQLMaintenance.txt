@@ -7,7 +7,7 @@
 ***********************************************
 
 Change Log:
-	2024-04-23 - Add ability to skip certain tables during maintenance.
+	2024-04-23 - Add ability to skip certain tables and skip CDC tables during maintenance.
 	2024-09-23 - Avoid rebuild heaps on external tables as this is not needed and not possible.
 	2024-09-18 - Preserve xml compression in case this was used for the index.
 	2024-04-18 - Add internal variable to control SORT_IN_TEMPDB, change the way alter index command is being build to make it more flexible.
@@ -32,7 +32,8 @@ ALTER PROCEDURE [AzureSQLMaintenance]
 		@RebuildHeaps bit = 0,
 		@LogToTable bit = 0,
 		@debug nvarchar(10) = 'off',
-		@skipTables nvarchar(500) = null
+		@skipTables nvarchar(500) = null,
+		@skipCdcTables bit = 0
 	)
 as
 begin
@@ -325,6 +326,21 @@ begin
 					)
 				)
 			)
+		end
+
+		-- If skipping CDC tables
+		if @skipCdcTables = 1
+		begin
+			update #idxBefore set SkipIndex=1,SkipReason='CDC table'
+			where (
+	                    object_id in (
+				SELECT i.object_id
+				FROM sys.indexes AS i
+				JOIN sys.tables AS t ON i.object_id = t.object_id
+				WHERE SCHEMA_NAME(t.schema_id) = 'cdc'
+				)
+			)
+			and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
 		end
 
 		/***/
@@ -654,5 +670,8 @@ exec  AzureSQLMaintenance 'index'
 5. run maintenance excluding skip tables
 exec AzureSQLMaintenance @skipTables='TableToSkip'
 exec AzureSQLMaintenance @skipTables='TableToSkipOne,TableToSkip2'
+
+6. run maintenance excluding CDC tables
+exec AzureSQLMaintenance @skipCdcTables=1
 
 */
