@@ -219,20 +219,6 @@ begin
 
 		raiserror('Get index information...(wait)',0,0) with nowait;
 
-		/* Setup tables to skip */
-		drop table if exists #TablesToSkip;
-		create table #TablesToSkip
-		(
-		    [value] nvarchar(100)
-		);
-
-		if @skipTables is not null
-        	begin
-			insert into #TablesToSkip ([value])
-			select value
-			from STRING_SPLIT(@skipTables, ',');
-		end
-
 		/* Get Index Information */
 		/* using inner join - this eliminates indexes that we cannot maintain such as indexes on functions */
 		select
@@ -272,11 +258,7 @@ begin
 		and OBJECT_SCHEMA_NAME(idxs.object_id) != 'sys'
 		and idxs.is_disabled=0
 		and obj.type_desc != 'TF' /* Ignore table value functions */
-		and object_name(idxs.object_id) not in (select [value] from #TablesToSkip) /*  Exclude tables to skip passed in from @skipTables */
 		order by i.avg_fragmentation_in_percent desc, i.page_count desc
-
-		-- drop temp table which holds tables to skip passed in from @skipTables
-		drop table if exists #TablesToSkip;
 
 		-- mark indexes XML,spatial and columnstore not to run online update
 		update #idxBefore set OnlineOpIsNotSupported=1 where [object_id] in (select [object_id] from #idxBefore where [type]=3 /*XML Indexes*/)
@@ -334,6 +316,30 @@ begin
 							)
 				)
 				and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
+
+		/* Tables marked to skip */
+		drop table if exists #TablesToSkip;
+		create table #TablesToSkip
+		(
+		    [value] nvarchar(100)
+		);
+
+		if @skipTables is not null
+        	begin
+			insert into #TablesToSkip ([value])
+			select value
+			from STRING_SPLIT(@skipTables, ',');
+
+			update #idxBefore set SkipIndex=1,SkipReason='Table marked to skip'
+			where (
+				object_name(object_id) in (
+					select [value] from #TablesToSkip /*  Exclude tables to skip passed in from @skipTables */
+				)
+			)
+		end
+
+		-- drop temp table which holds tables to skip passed in from @skipTables
+		drop table if exists #TablesToSkip;
 
 		-- If skipping CDC tables
 		if @skipCdcTables = 1
