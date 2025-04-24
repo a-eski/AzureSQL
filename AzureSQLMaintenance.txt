@@ -328,20 +328,13 @@ begin
 			)
 		end
 
-		-- If skipping CDC tables
+		/* If skipping CDC tables */
 		if @skipCdcTables = 1
 		begin
-			update #idxBefore set SkipIndex=1,SkipReason='CDC table'
-			where (
-	                    ObjectName in (
-					SELECT idxs.name
-					FROM sys.indexes AS idxs
-					INNER JOIN sys.tables AS t ON idxs.object_id = t.object_id
-					WHERE SCHEMA_NAME(t.schema_id) = 'cdc'
-				)
-			)
-			and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
-		end
+            		update #idxBefore set SkipIndex=1,SkipReason='CDC table'
+	        	where ObjectSchema = 'cdc'
+				  and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
+        	end
 
 		/***/
 		update #idxBefore set OperationToTake =
@@ -513,6 +506,30 @@ begin
 			update _stats set SkipStatistics=1
 			from #statsBefore _stats join sys.index_resumable_operations iro on _stats.object_id=iro.object_id and _stats.stats_id=iro.index_id
 		end
+
+		/* Tables marked to skip */
+        	if @skipTables is not null
+            	begin
+                	/*  Exclude tables to skip passed in from @skipTables */
+                	update #statsBefore
+                	set SkipStatistics=1
+                	where (
+                    	ObjectName in (select ObjectName
+                        	from #statsBefore
+                                where ObjectName in (select [value]
+                                	from STRING_SPLIT(@skipTables, ',')))
+                    	)
+                		and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
+            	end
+
+        	/* If skipping CDC tables */
+        	if @skipCdcTables = 1
+            	begin
+                	update #statsBefore
+                	set SkipStatistics=1
+                	where ObjectSchema = 'cdc'
+                  		and @mode != 'dummy' /*for Dummy mode we do not want to skip anything */
+            	end-
 
 		raiserror('---------------------------------------',0,0) with nowait
 		raiserror('Statistics Information:',0,0) with nowait
